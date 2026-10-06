@@ -1,0 +1,6 @@
+{
+  "name": "kaveri-advisory-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kaveri Advisory - AI irrigation advisory system for sugarcane. Static site + /api serverless contact form."
+}

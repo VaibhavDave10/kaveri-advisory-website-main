@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microservices Dashboard — Kaveri Advisory</title>
+<meta name="description" content="Live microservices dashboard demonstrating Weather, Advisory, and Notification services for sugarcane irrigation.">
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* ── Dashboard-specific styles ── */
+.dash-hero {
+  background: linear-gradient(135deg, var(--cane-deep) 0%, #0D1F14 100%);
+  color: var(--cream);
+  padding: 48px 0 36px;
+}
+.dash-hero h1 { font-family: var(--font-display); font-size: clamp(26px, 3.5vw, 38px); margin: 0 0 8px; }
+.dash-hero p { color: var(--cane-pale); font-size: 15px; margin: 0; }
+
+/* Service status bar */
+.svc-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin: -24px 0 32px;
+  position: relative;
+  z-index: 10;
+}
+.svc-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow 0.2s;
+}
+.svc-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.svc-card .svc-name {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--water);
+}
+.svc-card .svc-label {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.svc-card .svc-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+}
+.svc-card .svc-status .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #999;
+  flex-shrink: 0;
+}
+.svc-card .svc-status .dot.ok   { background: #22C55E; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.svc-card .svc-status .dot.fail { background: #EF4444; box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+.svc-card .svc-status .dot.wait { background: #F59E0B; animation: pulse 1.2s infinite; }
+.svc-card .svc-latency { font-size: 11px; color: #888; font-family: var(--font-mono); }
+
+/* Panels */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(31,59,40,0.04);
+}
+.panel-head h3 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  margin: 0;
+}
+.panel-head .tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--water);
+  border: 1px solid var(--water);
+  border-radius: 20px;
+  padding: 2px 10px;
+}
+.panel-body { padding: 20px; }
+
+/* Form inside panels */
+.dash-field { margin-bottom: 14px; }
+.dash-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cane-mid);
+}
+.dash-field input, .dash-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: #fff;
+}
+.dash-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dash-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+.btn-dash {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 11px 22px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-green { background: var(--cane-deep); color: var(--cream); }
+.btn-green:hover { background: #163422; }
+.btn-gold  { background: var(--gold); color: #241601; }
+.btn-gold:hover  { background: #AD7A1B; }
+.btn-water { background: var(--water); color: #fff; }
+.btn-water:hover { background: #1C4F5D; }
+.btn-dash:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Response area */
+.response-box {
+  margin-top: 16px;
+  background: #16291D;
+  border-radius: 8px;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #D7E4C4;
+  max-height: 360px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  display: none;
+}
+.response-box.visible { display: block; }
+
+/* Advisory result card */
+.advisory-result {
+  margin-top: 16px;
+  background: rgba(192,138,34,0.1);
+  border: 1px solid rgba(192,138,34,0.3);
+  border-radius: 10px;
+  padding: 18px;
+  display: none;
+}
+.advisory-result.visible { display: block; }
+.advisory-result .adv-urgency {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+.urgency-high   { background: #FEE2E2; color: #991B1B; }
+.urgency-medium { background: #FEF3C7; color: #92400E; }
+.urgency-low    { background: #D1FAE5; color: #065F46; }
+.advisory-result .adv-text {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  margin: 8px 0 14px;
+}
+.advisory-result .adv-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.adv-metric {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.adv-metric .metric-val {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cane-deep);
+  display: block;
+}
+.adv-metric .metric-lbl {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+/* Notification log */
+.notif-log {
+  margin-top: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13px;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.notif-icon.delivered { background: #D1FAE5; }
+.notif-icon.failed    { background: #FEE2E2; }
+
+/* Full-width panel */
+.panel-full {
+  grid-column: 1 / -1;
+}
+
+/* Architecture diagram */
+.arch-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 24px;
+}
+.arch-box {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 20px;
+  text-align: center;
+  min-width: 140px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.arch-box:hover { transform: translateY(-3px); border-color: var(--gold); }
+.arch-box .arch-icon { font-size: 24px; margin-bottom: 6px; }
+.arch-box .arch-name { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+.arch-box .arch-port { font-family: var(--font-mono); font-size: 11px; color: var(--water); }
+.arch-box .arch-tech { font-family: var(--font-mono); font-size: 10px; color: #888; margin-top: 2px; }
+.arch-arrow {
+  font-size: 20px;
+  color: var(--gold);
+  font-weight: bold;
+}
+.arch-box.gateway { border-color: var(--gold); background: rgba(192,138,34,0.08); }
+.arch-box.frontend { border-color: var(--cane-mid); background: rgba(61,107,69,0.08); }
+
+@media(max-width: 900px) {
+  .svc-bar { grid-template-columns: 1fr 1fr; }
+  .dash-grid { grid-template-columns: 1fr; }
+  .arch-diagram { flex-direction: column; }
+  .arch-arrow { transform: rotate(90deg); }
+  .adv-metrics { grid-template-columns: 1fr !important; }
+}
+@media(max-width: 640px) {
+  .svc-bar { grid-template-columns: 1fr; }
+  .dash-row, .dash-row-3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <div class="wrap">
+    <a href="index.html" class="brand"><span class="mark"></span>Kaveri Advisory</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="solution.html">Solution</a></li>
+      <li><a href="how-it-works.html">How it works</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+      <li><a href="dashboard.html" class="active">Dashboard</a></li>
+    </ul>
+    <a href="dashboard.html" class="nav-cta">Microservices Dashboard</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="dash-hero">
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span>DevOps Lab · Microservices Demo</p>
+    <h1>Sugarcane Irrigation Advisory — Live Dashboard</h1>
+    <p>Three microservices working together: Weather → Advisory → Notification</p>
+  </div>
+</header>
+
+<!-- Service Status Bar -->
+<div class="wrap">
+  <div class="svc-bar" id="service-bar">
+    <div class="svc-card" id="svc-gateway">
+      <span class="svc-name">API Gateway</span>
+      <span class="svc-label">Gateway</span>
+      <span class="svc-status"><span class="dot wait" id="dot-gateway"></span><span id="status-gateway">Checking...</span></span>
+      <span class="svc-latency" id="latency-gateway"></span>
+    </div>
+    <div class="svc-card" id="svc-weather">
+      <span class="svc-name">Microservice 1</span>
+      <span class="svc-label">Weather Service</span>
+      <span class="svc-status"><span class="dot wait" id="dot-weather"></span><span id="status-weather">Checking...</span></span>
+      <span class="svc-latency" id="latency-weather"></span>
+    </div>
+    <div class="svc-card" id="svc-advisory">
+      <span class="svc-name">Microservice 2</span>
+      <span class="svc-label">Advisory Service</span>
+      <span class="svc-status"><span class="dot wait" id="dot-advisory"></span><span id="status-advisory">Checking...</span></span>
+      <span class="svc-latency" id="latency-advisory"></span>
+    </div>
+    <div class="svc-card" id="svc-notification">
+      <span class="svc-name">Microservice 3</span>
+      <span class="svc-label">Notification Service</span>
+      <span class="svc-status"><span class="dot wait" id="dot-notification"></span><span id="status-notification">Checking...</span></span>
+      <span class="svc-latency" id="latency-notification"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Architecture Diagram -->
+<section class="section-cream" style="padding:32px 0;">
+  <div class="wrap">
+    <div class="panel panel-full">
+      <div class="panel-head">
+        <h3>Microservices Architecture</h3>
+        <span class="tag">ARCHITECTURE</span>
+      </div>
+      <div class="arch-diagram">
+        <div class="arch-box frontend">
+          <div class="arch-icon">🌐</div>
+          <div class="arch-name">Frontend</div>
+          <div class="arch-port">dashboard.html</div>
+          <div class="arch-tech">HTML / JS / CSS</div>
+        </div>
+        <span class="arch-arrow">→</span>
+        <div class="arch-box gateway">
+          <div class="arch-icon">🚀</div>
+          <div class="arch-name">API Gateway</div>
+          <div class="arch-port">:4000</div>
+          <div class="arch-tech">Node.js + Express</div>
+        </div>
+        <span class="arch-arrow">→</span>
+        <div class="arch-box">
+          <div class="arch-icon">🌦️</div>
+          <div class="arch-name">Weather Service</div>
+          <div class="arch-port">:4001</div>
+          <div class="arch-tech">Node.js + Express</div>
+        </div>
+        <span class="arch-arrow" style="visibility:hidden;">→</span>
+        <div class="arch-box">
+          <div class="arch-icon">🌱</div>
+          <div class="arch-name">Advisory Service</div>
+          <div class="arch-port">:4002</div>
+          <div class="arch-tech">Python + Flask</div>
+        </div>
+        <span class="arch-arrow" style="visibility:hidden;">→</span>
+        <div class="arch-box">
+          <div class="arch-icon">📱</div>
+          <div class="arch-name">Notification Service</div>
+          <div class="arch-port">:4003</div>
+          <div class="arch-tech">Node.js + Express</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Main Dashboard -->
+<section class="section-alt" style="padding:32px 0 48px;">
+  <div class="wrap">
+    <div class="dash-grid">
+
+      <!-- Panel 1: Weather Service -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>🌦️ Weather Data</h3>
+          <span class="tag">SERVICE 1 · PORT 4001</span>
+        </div>
+        <div class="panel-body">
+          <div class="dash-field">
+            <label>Region</label>
+            <select id="weather-region">
+              <option value="sameerwadi">Sameerwadi (Bagalkot)</option>
+              <option value="belgaum">Belgaum</option>
+              <option value="kolhapur">Kolhapur</option>
+              <option value="sangli">Sangli</option>
+              <option value="mandya">Mandya</option>
+            </select>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn-dash btn-water" id="btn-weather-current" onclick="fetchWeatherCurrent()">Get Current Weather</button>
+            <button class="btn-dash btn-green" id="btn-weather-forecast" onclick="fetchWeatherForecast()">Get Forecast</button>
+          </div>
+          <div class="response-box" id="weather-response"></div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Advisory Service -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>🌱 Irrigation Advisory</h3>
+          <span class="tag">SERVICE 2 · PORT 4002</span>
+        </div>
+        <div class="panel-body">
+          <div class="dash-row">
+            <div class="dash-field">
+              <label>Plot ID</label>
+              <input type="text" id="adv-plot-id" value="PLOT-12" />
+            </div>
+            <div class="dash-field">
+              <label>Region</label>
+              <select id="adv-region">
+                <option value="sameerwadi">Sameerwadi</option>
+                <option value="belgaum">Belgaum</option>
+                <option value="kolhapur">Kolhapur</option>
+                <option value="sangli">Sangli</option>
+                <option value="mandya">Mandya</option>
+              </select>
+            </div>
+          </div>
+          <div class="dash-row-3">
+            <div class="dash-field">
+              <label>Soil Moisture %</label>
+              <input type="number" id="adv-moisture" value="24.4" step="0.1" min="0" max="60" />
+            </div>
+            <div class="dash-field">
+              <label>Crop Age (months)</label>
+              <input type="number" id="adv-age" value="6.2" step="0.1" min="0" max="18" />
+            </div>
+            <div class="dash-field">
+              <label>Plot Area (ha)</label>
+              <input type="number" id="adv-area" value="1.0" step="0.1" min="0.1" max="50" />
+            </div>
+          </div>
+          <div class="dash-row">
+            <div class="dash-field">
+              <label>Soil Type</label>
+              <select id="adv-soil">
+                <option value="black_cotton">Black Cotton</option>
+                <option value="red_laterite">Red Laterite</option>
+                <option value="alluvial">Alluvial</option>
+                <option value="sandy_loam">Sandy Loam</option>
+                <option value="clay_loam">Clay Loam</option>
+              </select>
+            </div>
+            <div class="dash-field">
+              <label>Variety</label>
+              <select id="adv-variety">
+                <option value="CO_86032">CO 86032</option>
+                <option value="CO_0238">CO 0238</option>
+                <option value="COC_671">COC 671</option>
+                <option value="CO_92005">CO 92005</option>
+                <option value="VSI_434">VSI 434</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-dash btn-gold" id="btn-advisory" onclick="fetchAdvisory()">🌱 Generate Advisory</button>
+
+          <!-- Advisory Result Display -->
+          <div class="advisory-result" id="advisory-result">
+            <span class="adv-urgency" id="adv-urgency-badge"></span>
+            <div class="adv-text" id="adv-text"></div>
+            <div class="adv-metrics" id="adv-metrics"></div>
+            <div style="margin-top:12px;">
+              <strong style="font-size:12px; color:var(--water); font-family:var(--font-mono);">KANNADA:</strong>
+              <p id="adv-kannada" style="font-size:13px; color:#555; margin:4px 0 8px;"></p>
+              <strong style="font-size:12px; color:var(--water); font-family:var(--font-mono);">HINDI:</strong>
+              <p id="adv-hindi" style="font-size:13px; color:#555; margin:4px 0 0;"></p>
+            </div>
+          </div>
+          <div class="response-box" id="advisory-response"></div>
+        </div>
+      </div>
+
+      <!-- Panel 3: Notification Service -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📱 Send Notification</h3>
+          <span class="tag">SERVICE 3 · PORT 4003</span>
+        </div>
+        <div class="panel-body">
+          <div class="dash-row">
+            <div class="dash-field">
+              <label>Farmer Name</label>
+              <input type="text" id="notif-farmer" value="Rajesh Patil" />
+            </div>
+            <div class="dash-field">
+              <label>Farmer Phone</label>
+              <input type="text" id="notif-phone" value="+91 98765 43210" />
+            </div>
+          </div>
+          <div class="dash-row">
+            <div class="dash-field">
+              <label>Language</label>
+              <select id="notif-lang">
+                <option value="en">English</option>
+                <option value="kn">Kannada</option>
+                <option value="hi">Hindi</option>
+              </select>
+            </div>
+            <div class="dash-field">
+              <label>Channels</label>
+              <select id="notif-channel" multiple style="height: 70px;">
+                <option value="sms" selected>SMS</option>
+                <option value="whatsapp" selected>WhatsApp</option>
+                <option value="push">Push Notification</option>
+                <option value="dashboard" selected>Dashboard</option>
+              </select>
+            </div>
+          </div>
+          <p style="font-size:12px; color:#888; margin:0 0 12px;">Advisory text from the last generated advisory will be sent automatically.</p>
+          <button class="btn-dash btn-green" id="btn-notify" onclick="sendNotification()" disabled>📱 Send Notification</button>
+          <div class="response-box" id="notif-response"></div>
+        </div>
+      </div>
+
+      <!-- Panel 4: Notification History -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📋 Notification History</h3>
+          <span class="tag">SERVICE 3 · LOG</span>
+        </div>
+        <div class="panel-body">
+          <button class="btn-dash btn-water" onclick="fetchNotifHistory()">Refresh History</button>
+          <button class="btn-dash btn-green" onclick="fetchNotifStats()" style="margin-left:8px;">View Stats</button>
+          <div class="notif-log" id="notif-log">
+            <p style="color:#888; font-size:13px;">Send a notification to see it here.</p>
+          </div>
+          <div class="response-box" id="notif-stats-response"></div>
+        </div>
+      </div>
+
+      <!-- Full-width: Raw API Response Panel -->
+      <div class="panel panel-full">
+        <div class="panel-head">
+          <h3>🔍 Full API Flow Demo</h3>
+          <span class="tag">END-TO-END</span>
+        </div>
+        <div class="panel-body">
+          <p style="font-size:14px; color:#555; margin:0 0 14px;">
+            Run the complete flow: <strong>Weather → Advisory → Notification</strong> in a single click.
+            This demonstrates all three microservices communicating through the API Gateway.
+          </p>
+          <button class="btn-dash btn-gold" id="btn-full-flow" onclick="runFullFlow()">⚡ Run Complete Flow</button>
+          <div class="response-box" id="flow-response"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a href="index.html" class="brand" style="color:var(--cream);"><span class="mark"></span>Kaveri Advisory</a>
+        <p style="max-width:32ch;font-size:14px;margin-top:14px;">Microservices architecture demo for DevOps Lab — AI-based sugarcane irrigation advisory.</p>
+      </div>
+      <div>
+        <h5>Site</h5>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="solution.html">Solution</a></li>
+          <li><a href="how-it-works.html">How it works</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Microservices</h5>
+        <ul>
+          <li><a href="http://localhost:4001/health" target="_blank">Weather Service</a></li>
+          <li><a href="http://localhost:4002/health" target="_blank">Advisory Service</a></li>
+          <li><a href="http://localhost:4003/health" target="_blank">Notification Service</a></li>
+          <li><a href="http://localhost:4000/api/health" target="_blank">API Gateway Health</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>API Endpoints</h5>
+        <ul>
+          <li><a href="http://localhost:4000/api/info" target="_blank">Gateway Info</a></li>
+          <li><a href="http://localhost:4001/weather/regions" target="_blank">Weather Regions</a></li>
+          <li><a href="http://localhost:4002/advisory/soil-types" target="_blank">Soil Types</a></li>
+          <li><a href="http://localhost:4002/advisory/varieties" target="_blank">Varieties</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Kaveri Advisory. Student project for academic demonstration.</span>
+      <span>DevOps CA — Microservices Architecture Demo</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ──── Configuration ────
+// Direct service URLs (fallback when gateway is down, or for direct testing)
+const GATEWAY = 'http://localhost:4000';
+const WEATHER_DIRECT  = 'http://localhost:4001';
+const ADVISORY_DIRECT = 'http://localhost:4002';
+const NOTIF_DIRECT    = 'http://localhost:4003';
+
+// Track last advisory for notification
+let lastAdvisory = null;
+
+// ──── Health Checks ────
+async function checkHealth(name, url, dotId, statusId, latencyId) {
+  const dot     = document.getElementById(dotId);
+  const status  = document.getElementById(statusId);
+  const latency = document.getElementById(latencyId);
+  
+  dot.className = 'dot wait';
+  status.textContent = 'Checking...';
+
+  const start = Date.now();
+  try {
+    const res = await fetch(url + '/health', { signal: AbortSignal.timeout(4000) });
+    const ms  = Date.now() - start;
+    if (res.ok) {
+      dot.className = 'dot ok';
+      status.textContent = 'Healthy';
+      latency.textContent = ms + 'ms';
+    } else {
+      dot.className = 'dot fail';
+      status.textContent = 'Error ' + res.status;
+      latency.textContent = ms + 'ms';
+    }
+  } catch(e) {
+    dot.className = 'dot fail';
+    status.textContent = 'Unreachable';
+    latency.textContent = '';
+  }
+}
+
+function runHealthChecks() {
+  checkHealth('gateway',      GATEWAY,         'dot-gateway',      'status-gateway',      'latency-gateway');
+  checkHealth('weather',      WEATHER_DIRECT,  'dot-weather',      'status-weather',      'latency-weather');
+  checkHealth('advisory',     ADVISORY_DIRECT, 'dot-advisory',     'status-advisory',     'latency-advisory');
+  checkHealth('notification', NOTIF_DIRECT,    'dot-notification', 'status-notification', 'latency-notification');
+}
+
+// Run on load and every 15 seconds
+runHealthChecks();
+setInterval(runHealthChecks, 15000);
+
+// ──── Weather Service ────
+async function fetchWeatherCurrent() {
+  const region = document.getElementById('weather-region').value;
+  const box    = document.getElementById('weather-response');
+  const btn    = document.getElementById('btn-weather-current');
+  
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+  box.classList.add('visible');
+  box.textContent = 'Loading...';
+
+  try {
+    const res  = await fetch(WEATHER_DIRECT + '/weather/current?region=' + region);
+    const data = await res.json();
+    box.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    box.textContent = '❌ Weather Service unreachable.\nMake sure it is running on port 4001.';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Get Current Weather';
+}
+
+async function fetchWeatherForecast() {
+  const region = document.getElementById('weather-region').value;
+  const box    = document.getElementById('weather-response');
+  const btn    = document.getElementById('btn-weather-forecast');
+  
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+  box.classList.add('visible');
+  box.textContent = 'Loading...';
+
+  try {
+    const res  = await fetch(WEATHER_DIRECT + '/weather/forecast?region=' + region);
+    const data = await res.json();
+    box.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    box.textContent = '❌ Weather Service unreachable.\nMake sure it is running on port 4001.';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Get Forecast';
+}
+
+// ──── Advisory Service ────
+async function fetchAdvisory() {
+  const box = document.getElementById('advisory-response');
+  const resultDiv = document.getElementById('advisory-result');
+  const btn = document.getElementById('btn-advisory');
+  
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  box.classList.add('visible');
+  box.textContent = 'Sending plot data to Advisory Service → which calls Weather Service → generates advisory...';
+
+  const payload = {
+    plot_id:           document.getElementById('adv-plot-id').value,
+    soil_moisture_pct: parseFloat(document.getElementById('adv-moisture').value),
+    crop_age_months:   parseFloat(document.getElementById('adv-age').value),
+    soil_type:         document.getElementById('adv-soil').value,
+    variety:           document.getElementById('adv-variety').value,
+    region:            document.getElementById('adv-region').value,
+    plot_area_ha:      parseFloat(document.getElementById('adv-area').value),
+    root_depth_m:      0.6,
+  };
+
+  try {
+    const res  = await fetch(ADVISORY_DIRECT + '/advisory/irrigate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    lastAdvisory = data;
+
+    // Display the full JSON
+    box.textContent = JSON.stringify(data, null, 2);
+
+    // Display formatted advisory result
+    resultDiv.classList.add('visible');
+
+    // Urgency badge
+    const badge = document.getElementById('adv-urgency-badge');
+    const urg = data.recommendation?.urgency || 'low';
+    badge.textContent = urg.toUpperCase() + ' URGENCY';
+    badge.className = 'adv-urgency urgency-' + urg;
+
+    // Advisory text
+    document.getElementById('adv-text').textContent = data.advisory?.en || 'No advisory generated.';
+    document.getElementById('adv-kannada').textContent = data.advisory?.kn || '';
+    document.getElementById('adv-hindi').textContent = data.advisory?.hi || '';
+
+    // Metrics
+    const metricsDiv = document.getElementById('adv-metrics');
+    const rec = data.recommendation || {};
+    const ana = data.analysis || {};
+    metricsDiv.innerHTML = `
+      <div class="adv-metric">
+        <span class="metric-val">${rec.irrigate ? '✅ Yes' : '❌ No'}</span>
+        <span class="metric-lbl">Irrigate Now?</span>
+      </div>
+      <div class="adv-metric">
+        <span class="metric-val">${rec.duration_hours || 0}h</span>
+        <span class="metric-lbl">Duration</span>
+      </div>
+      <div class="adv-metric">
+        <span class="metric-val">${ana.water_stress_index || 0}</span>
+        <span class="metric-lbl">Stress Index</span>
+      </div>
+      <div class="adv-metric">
+        <span class="metric-val">${rec.irrigation_depth_mm || 0}mm</span>
+        <span class="metric-lbl">Water Depth</span>
+      </div>
+      <div class="adv-metric">
+        <span class="metric-val">${rec.days_until_next_irrigation || '?'}d</span>
+        <span class="metric-lbl">Next Irrigation</span>
+      </div>
+      <div class="adv-metric">
+        <span class="metric-val">${ana.etc_mm_day || 0}mm</span>
+        <span class="metric-lbl">ETc / Day</span>
+      </div>
+    `;
+
+    // Enable notification button
+    document.getElementById('btn-notify').disabled = false;
+  } catch(e) {
+    box.textContent = '❌ Advisory Service unreachable.\nMake sure it is running on port 4002.\n\nThe Advisory Service also needs the Weather Service (port 4001) running.';
+    resultDiv.classList.remove('visible');
+  }
+  btn.disabled = false;
+  btn.textContent = '🌱 Generate Advisory';
+}
+
+// ──── Notification Service ────
+async function sendNotification() {
+  if (!lastAdvisory) {
+    alert('Generate an advisory first!');
+    return;
+  }
+
+  const box = document.getElementById('notif-response');
+  const btn = document.getElementById('btn-notify');
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  box.classList.add('visible');
+
+  const selectedChannels = Array.from(document.getElementById('notif-channel').selectedOptions).map(o => o.value);
+
+  const payload = {
+    plot_id:           lastAdvisory.plot_id,
+    farmer_name:       document.getElementById('notif-farmer').value,
+    farmer_phone:      document.getElementById('notif-phone').value,
+    advisory_text:     lastAdvisory.advisory?.en || 'No advisory.',
+    advisory_kannada:  lastAdvisory.advisory?.kn || '',
+    advisory_hindi:    lastAdvisory.advisory?.hi || '',
+    urgency:           lastAdvisory.recommendation?.urgency || 'medium',
+    channels:          selectedChannels,
+    language:          document.getElementById('notif-lang').value,
+  };
+
+  try {
+    const res  = await fetch(NOTIF_DIRECT + '/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    box.textContent = JSON.stringify(data, null, 2);
+    fetchNotifHistory(); // Refresh log
+  } catch(e) {
+    box.textContent = '❌ Notification Service unreachable.\nMake sure it is running on port 4003.';
+  }
+  btn.disabled = false;
+  btn.textContent = '📱 Send Notification';
+}
+
+async function fetchNotifHistory() {
+  const log = document.getElementById('notif-log');
+  try {
+    const res  = await fetch(NOTIF_DIRECT + '/notifications?limit=10');
+    const data = await res.json();
+
+    if (!data.notifications || data.notifications.length === 0) {
+      log.innerHTML = '<p style="color:#888; font-size:13px;">No notifications yet.</p>';
+      return;
+    }
+
+    log.innerHTML = data.notifications.map(n => `
+      <div class="notif-item">
+        <div class="notif-icon ${n.overall_status === 'delivered' ? 'delivered' : 'failed'}">
+          ${n.overall_status === 'delivered' ? '✅' : '⚠️'}
+        </div>
+        <div>
+          <strong>${n.farmer_name}</strong> · ${n.plot_id}
+          <span style="font-size:11px; color:#888; margin-left:6px;">${n.id}</span>
+          <br>
+          <span style="font-size:12px; color:#555;">${n.message.substring(0, 80)}${n.message.length > 80 ? '...' : ''}</span>
+          <br>
+          <span style="font-size:11px; color:#888; font-family:var(--font-mono);">
+            ${n.delivery.map(d => d.channel + ': ' + d.status).join(' · ')} · ${new Date(n.created_at).toLocaleTimeString()}
+          </span>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    log.innerHTML = '<p style="color:#EF4444; font-size:13px;">❌ Could not reach Notification Service.</p>';
+  }
+}
+
+async function fetchNotifStats() {
+  const box = document.getElementById('notif-stats-response');
+  box.classList.add('visible');
+  try {
+    const res  = await fetch(NOTIF_DIRECT + '/notifications/stats/summary');
+    const data = await res.json();
+    box.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    box.textContent = '❌ Could not reach Notification Service.';
+  }
+}
+
+// ──── Full Flow Demo ────
+async function runFullFlow() {
+  const box = document.getElementById('flow-response');
+  const btn = document.getElementById('btn-full-flow');
+  
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  box.classList.add('visible');
+  box.textContent = '';
+
+  const log = (msg) => { box.textContent += msg + '\n'; };
+
+  log('═══════════════════════════════════════════════════');
+  log('  KAVERI ADVISORY — END-TO-END MICROSERVICES FLOW');
+  log('═══════════════════════════════════════════════════\n');
+
+  // Step 1: Weather
+  log('STEP 1 → Calling Weather Service (port 4001)...');
+  try {
+    const weatherRes = await fetch(WEATHER_DIRECT + '/weather/current?region=sameerwadi');
+    const weather = await weatherRes.json();
+    log('✅ Weather data received:');
+    log(`   Temperature: ${weather.current.temperature_c}°C`);
+    log(`   Humidity:    ${weather.current.humidity_pct}%`);
+    log(`   ET0:         ${weather.evapotranspiration.et0_mm_day} mm/day\n`);
+  } catch(e) {
+    log('❌ Weather Service unreachable!\n');
+  }
+
+  // Step 2: Forecast
+  log('STEP 2 → Fetching rainfall forecast...');
+  try {
+    const forecastRes = await fetch(WEATHER_DIRECT + '/weather/forecast?region=sameerwadi');
+    const forecast = await forecastRes.json();
+    log('✅ Forecast received:');
+    log(`   Rain next 24h: ${forecast.summary.rainfall_next_24h_mm} mm`);
+    log(`   Rain expected:  ${forecast.summary.rain_expected_24h ? 'YES' : 'NO'}\n`);
+  } catch(e) {
+    log('❌ Forecast fetch failed!\n');
+  }
+
+  // Step 3: Advisory
+  log('STEP 3 → Calling Advisory Service (port 4002)...');
+  log('         Advisory Service internally calls Weather Service...');
+  try {
+    const advRes = await fetch(ADVISORY_DIRECT + '/advisory/irrigate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plot_id: 'PLOT-12',
+        soil_moisture_pct: 24.4,
+        crop_age_months: 6.2,
+        soil_type: 'black_cotton',
+        variety: 'CO_86032',
+        region: 'sameerwadi',
+        root_depth_m: 0.6,
+        plot_area_ha: 1.0,
+      }),
+    });
+    const adv = await advRes.json();
+    lastAdvisory = adv;
+    log('✅ Advisory generated:');
+    log(`   Growth Stage:  ${adv.growth_stage}`);
+    log(`   Stress Level:  ${adv.analysis.stress_level} (${adv.analysis.water_stress_index})`);
+    log(`   Irrigate Now:  ${adv.recommendation.irrigate ? 'YES' : 'NO'}`);
+    log(`   Duration:      ${adv.recommendation.duration_hours} hours`);
+    log(`   Advisory (EN): ${adv.advisory.en}`);
+    log(`   Advisory (KN): ${adv.advisory.kn}\n`);
+  } catch(e) {
+    log('❌ Advisory Service unreachable!\n');
+  }
+
+  // Step 4: Notification
+  log('STEP 4 → Sending notification via Notification Service (port 4003)...');
+  if (lastAdvisory) {
+    try {
+      const notifRes = await fetch(NOTIF_DIRECT + '/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plot_id: lastAdvisory.plot_id,
+          farmer_name: 'Rajesh Patil',
+          farmer_phone: '+91 98765 43210',
+          advisory_text: lastAdvisory.advisory?.en || '',
+          advisory_kannada: lastAdvisory.advisory?.kn || '',
+          urgency: lastAdvisory.recommendation?.urgency || 'medium',
+          channels: ['sms', 'whatsapp', 'dashboard'],
+          language: 'en',
+        }),
+      });
+      const notif = await notifRes.json();
+      log('✅ Notification sent:');
+      log(`   ID:     ${notif.notification.id}`);
+      log(`   Status: ${notif.notification.overall_status}`);
+      notif.notification.delivery.forEach(d => {
+        log(`   ${d.channel}: ${d.status} (${d.latency_ms}ms)`);
+      });
+      log('');
+      fetchNotifHistory();
+    } catch(e) {
+      log('❌ Notification Service unreachable!\n');
+    }
+  } else {
+    log('⚠️ Skipped — no advisory available to send.\n');
+  }
+
+  log('═══════════════════════════════════════════════════');
+  log('  FLOW COMPLETE — All 3 microservices participated');
+  log('═══════════════════════════════════════════════════');
+
+  btn.disabled = false;
+  btn.textContent = '⚡ Run Complete Flow';
+}
+
+// Mark active nav
+document.addEventListener('DOMContentLoaded', function() {
+  var here = window.location.pathname.split('/').pop() || 'index.html';
+  document.querySelectorAll('.nav-links a').forEach(function(a) {
+    if (a.getAttribute('href') === here) a.classList.add('active');
+  });
+});
+</script>
+
+</body>
+</html>
